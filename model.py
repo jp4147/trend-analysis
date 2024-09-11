@@ -42,7 +42,8 @@ class TransformerModel(nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=num_heads, dropout=dropout)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         
-        self.fc = nn.Linear(hidden_dim, 1)
+        self.fc1 = nn.Linear(hidden_dim, 128)
+        self.fc2 = nn.Linear(128, 1)
     
     def forward(self, x, mask=None):
         x = self.embedding(x)
@@ -51,7 +52,8 @@ class TransformerModel(nn.Module):
         x = self.transformer_encoder(x, src_key_padding_mask=mask)
         x = torch.mean(x, dim=1)  # Aggregate by averaging over the sequence length
         # x = x[:, 0, :]
-        x = self.fc(x)
+        x = self.fc1(x)
+        x = self.fc2(x)
         return x
     
     
