@@ -52,7 +52,7 @@ class TransformerModel(nn.Module):
         x = torch.mean(x, dim=1)  # Aggregate by averaging over the sequence length
         # x = x[:, 0, :]
         x = self.fc(x)
-        return torch.sigmoid(x)
+        return x
     
     
 class MLP(nn.Module):
