@@ -105,7 +105,122 @@ class Training:
                     break
 
         return best_model, train_losses, val_losses
+    def create_padding_mask(self, seq_lengths, max_len):
+        batch_size = len(seq_lengths)
+        mask = torch.zeros(batch_size, max_len, dtype=torch.bool)
+        for i, seq_len in enumerate(seq_lengths):
+            mask[i, seq_len:] = True
+        return mask
     
+# Testing L1 regularization
+class Training:
+    def __init__(self, data=None, model=None, input_dim=1, hidden_dim=128, output_dim=1, num_heads=4, num_layers=2, dropout=0.5, device=torch.device('cpu')):
+        self.data = data
+        self.device = device
+        
+        # Initialize data splits with optional normalization
+        self.data_splits = DataSplit(data, normalize=True)
+        self.train_loader = self.data_splits.train_loader
+        self.val_loader = self.data_splits.val_loader
+        
+        max_len = self.data_splits.max_len
+
+        # Choose the model architecture
+        if model == 'tf':
+            self.model = TransformerModel(input_dim, num_heads, num_layers, hidden_dim, max_len, dropout, device=device).to(device)
+        elif model == 'mlp':
+            self.model = MLP(input_dim, hidden_dim, output_dim, dropout).to(device)
+        elif model == 'mlp_gpt':
+            self.model = MLP_gpt(input_dim, hidden_dim, output_dim, dropout).to(device)
+        elif model == 'lr_gpt' or model == 'lr':
+            self.model = LR(input_dim).to(device)
+        elif model == 'mlp_fix':
+            self.model = MLP_fix(input_dim, hidden_dim, output_dim, dropout).to(device)
+        else:
+            raise ValueError('Error: Choose a valid model type.')
+
+    def training(self, lr=0.0001, l1_lambda=0.001, weight_decay=0.01):  # Add l1_lambda for L1 regularization and weight_decay for L2 regularization
+        criterion = nn.BCEWithLogitsLoss()
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay)  # Apply L2 regularization via weight_decay
+
+        num_epochs = 2000
+        train_losses = []
+        val_losses = []
+        best_val_loss = float('inf')
+        best_model = None
+
+        epochs_without_improvement = 0
+        patience = 15
+
+        for epoch in range(num_epochs):
+            epoch_train_losses = []
+
+            self.model.train()
+            for sequences, labels in self.train_loader:
+                sequences, labels = sequences.to(self.device), labels.float().to(self.device)
+
+                seq_lengths = [len(seq[seq != 0]) for seq in sequences]
+                max_len = sequences.size(1)
+                mask = self.create_padding_mask(seq_lengths, max_len).to(self.device)
+
+                outputs = self.model(sequences, mask)
+                labels = labels.unsqueeze(1)
+
+                # Compute the base loss
+                loss = criterion(outputs, labels)
+                
+                # Add L1 regularization manually
+                l1_norm = sum(p.abs().sum() for p in self.model.parameters())
+                loss += l1_lambda * l1_norm  # Add L1 regularization term
+
+                epoch_train_losses.append(loss.item())
+
+                # Backward and optimize
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+            avg_train_loss = sum(epoch_train_losses) / len(epoch_train_losses)
+            train_losses.append(avg_train_loss)
+            print(f'Epoch [{epoch + 1}/{num_epochs}], Train Loss: {avg_train_loss}')
+
+            # Evaluate on validation set
+            self.model.eval()
+            with torch.no_grad():
+                val_losses_this_epoch = []
+                for sequences, labels in self.val_loader:
+                    sequences, labels = sequences.to(self.device), labels.float().to(self.device)
+
+                    seq_lengths = [len(seq[seq != 0]) for seq in sequences]
+                    max_len = sequences.size(1)
+                    mask = self.create_padding_mask(seq_lengths, max_len).to(self.device)
+
+                    outputs = self.model(sequences, mask)
+                    labels = labels.unsqueeze(1)
+                    loss = criterion(outputs, labels)
+                    
+                    # Optionally add L1 regularization to validation loss
+                    l1_norm = sum(p.abs().sum() for p in self.model.parameters())
+                    loss += l1_lambda * l1_norm
+
+                    val_losses_this_epoch.append(loss.item())
+
+                avg_val_loss = sum(val_losses_this_epoch) / len(val_losses_this_epoch)
+                val_losses.append(avg_val_loss)
+                print(f'Epoch [{epoch + 1}/{num_epochs}], Val Loss: {avg_val_loss}')
+
+            # Save the best model based on validation loss
+            if avg_val_loss < best_val_loss:
+                best_val_loss = avg_val_loss
+                best_model = copy.deepcopy(self.model.state_dict())
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
+                if epochs_without_improvement == patience:
+                    print("Stopping training due to lack of improvement in validation loss.")
+                    break
+
+        return best_model, train_losses, val_losses
     def create_padding_mask(self, seq_lengths, max_len):
         batch_size = len(seq_lengths)
         mask = torch.zeros(batch_size, max_len, dtype=torch.bool)
