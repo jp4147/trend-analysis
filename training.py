@@ -113,7 +113,7 @@ class Training:
         return mask
     
 # Testing L1 regularization
-class Training:
+'''class Training:
     def __init__(self, data=None, model=None, input_dim=1, hidden_dim=128, output_dim=1, num_heads=4, num_layers=2, dropout=0.5, device=torch.device('cpu')):
         self.data = data
         self.device = device
@@ -139,7 +139,7 @@ class Training:
         else:
             raise ValueError('Error: Choose a valid model type.')
 
-    def training(self, lr=0.0001, l1_lambda=0.001, weight_decay=0.01):  # Add l1_lambda for L1 regularization and weight_decay for L2 regularization
+def training(self, lr=0.0001, l1_lambda=0.001, weight_decay=0.01):  # Add l1_lambda for L1 regularization and weight_decay for L2 regularization
         criterion = nn.BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay)  # Apply L2 regularization via weight_decay
 
@@ -227,3 +227,4 @@ class Training:
         for i, seq_len in enumerate(seq_lengths):
             mask[i, seq_len:] = True
         return mask
+'''
