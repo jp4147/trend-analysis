@@ -58,23 +58,31 @@ class TransformerModel(nn.Module):
     
     
 class MLP(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout = 0.0):
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout=0.0):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(hidden_dim, output_dim)
-    
+
     def forward(self, x, mask):
-        mask = mask.unsqueeze(-1)
-        x = x*~mask # no effect
+        mask = mask.squeeze(-1).expand_as(x)  # Adjust mask to input shape
+
+        # Apply mask
+        x = x * mask  # Element-wise multiplication
+
+
+        # Fully connected layers
         out = self.fc1(x)
         out = self.relu(out)
-        out = torch.mean(out, dim=1)
+
+        # Skip mean pooling for non-sequence data
         out = self.fc2(out)
         return out
-    
+
+
+
 class MLP_gpt(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim):
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout =0.0):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.relu = nn.ReLU()
